@@ -61,8 +61,7 @@ gem "seo_geo"
 
 ## Status
 
-- Version 0.1.0, **not yet released** to RubyGems. Until then, use
-  `gem "seo_geo", github: "seunghan91/seo_geo"`.
+- Version 0.1.0, released to [RubyGems](https://rubygems.org/gems/seo_geo) on 2026-10-14.
 - CI runs Ruby 3.2, 3.3 and 3.4 × Rails 7.2, 8.0 and 8.1 (every cell), each against an ERB app and an
   Inertia-style app.
 - Runtime dependencies: `railties`, `actionpack`, `meta-tags ~> 2.24` and `reverse_markdown ~> 3.0`.
