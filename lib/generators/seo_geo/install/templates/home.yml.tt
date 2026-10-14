@@ -1,0 +1,14 @@
+# Page copy for SeoGeo.page(:home): title/description feed the head, faq feeds both the visible FAQ
+# (seo_geo_faq / seo_geo_fallback_body) and the FAQPage JSON-LD, so they always match.
+# Keyed by locale; a flat file (no locale keys) also works.
+en:
+  title: <%= site_name.to_json %>
+  description: Replace this with a 70–160 character summary of the home page for search results.
+  heading: <%= site_name.to_json %>
+  intro: One or two sentences that say what the site does and for whom.
+  features:
+    - title: First feature
+      description: What it does for the reader.
+  faq:
+    - question: <%= "What is #{site_name}?".to_json %>
+      answer: A short, factual answer that is also shown on the page.

@@ -1,0 +1,10 @@
+*.gem
+.bundle/
+vendor/bundle/
+Gemfile.lock
+gemfiles/*.gemfile.lock
+test/dummy*/log/
+test/dummy*/tmp/
+test/dummy*/storage/
+.mockups/
+test/tmp/

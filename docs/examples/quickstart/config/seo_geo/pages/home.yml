@@ -1,0 +1,9 @@
+# config/seo_geo/pages/home.yml — one copy source for the head, the visible FAQ and FAQPage JSON-LD
+en:
+  title: Plan your week in five minutes
+  description: Example turns a messy task list into a weekly plan your whole team can see, in five minutes.
+  heading: Plan your week in five minutes
+  intro: Example turns a messy task list into a weekly plan your whole team can see.
+  faq:
+    - question: Is Example free?
+      answer: Teams of up to three people use Example for free.

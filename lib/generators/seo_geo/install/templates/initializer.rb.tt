@@ -1,0 +1,52 @@
+# frozen_string_literal: true
+
+# seo_geo: SEO and GEO (AI search visibility). Every option is documented in docs/DESIGN.md of the gem.
+SeoGeo.configure do |seo|
+  seo.site.name = <%= site_name.inspect %>
+  seo.site.description = "One sentence that describes the site."
+  # seo.site.logo_url = "<%= origin %>/logo.png"
+  # seo.site.default_locale = :en   # <html lang>, inLanguage and og:locale (:ko => ko_KR) use this
+  # seo.site.same_as = ["https://github.com/your-org"]
+
+  # One canonical origin; alias hosts are folded onto it, undeclared hosts get Disallow: /.
+  seo.canonical_origin = <%= origin.inspect %>
+  # seo.canonical_aliases = ["example.com"]  # aliases inherit the canonical host's disallow/allow
+  # seo.host "www.example.com", disallow: ["/admin", "/oauth/"]
+  # seo.share_prefixes = ["/s/"]           # open for link-preview bots
+  # seo.noindex_paths = ["/waitlist", %r{\A/drafts/}]  # robots meta, sitemap.xml and llms.txt agree
+
+  # Crawlers by purpose (:allow or :deny): training, search, user-triggered fetches.
+  # seo.crawlers.training = :deny
+  # seo.crawlers.override "Bytespider", :deny
+  # seo.crawlers.override "Mediapartners-Google", :full_access  # Allow: / — ignores host disallows (opt-in)
+
+  # Search-console verification tokens.
+  # seo.verification.google = "..."
+  # seo.verification.bing = "..."
+  # seo.verification.naver = "..."
+
+  # seo.locales = %i[en ko]   # only then does I18n.locale pick the page language (else default_locale)
+  # seo.title_template = "%{title} | %{site}"
+  # seo.default_noindex = false
+
+  # GET /og/:key.png is routed only once a backend (or template) is set, and only for known keys
+  # (page keys, og_image.keys, og_image.key_resolver); other /og/... URLs reach your own routes.
+  # seo.og_image.backend = ->(key, page, params) { MyOgRenderer.png(key, page) }
+  # seo.og_image.fallback_url = "<%= origin %>/og-default.png"
+  # seo.og_image.fallback_width = 1200   # og:image:width/height for the fallback only when both are set
+  # seo.og_image.fallback_height = 630
+end
+
+# Sitemap sources. Never pass Time.now as lastmod; use real date columns.
+# Collections: pass a lambda so no model is loaded at boot and dev reloads never keep a stale class;
+# it is called per sitemap request. Records are read with find_each (select must include :id, order is
+# ignored); add batch: false to keep the scope's order.
+SeoGeo.sitemap.draw do
+  add "/", priority: 1.0
+  # add -> { Post.published }, path: ->(post) { "/posts/#{post.slug}" }, lastmod: :updated_at
+  # Under default_noindex: add ..., index: true, match: %r{\A/posts/[^/]+\z}   # head of each post indexable
+  # exclude %r{\A/s/}
+end
+
+# llms.txt: list the pages agents should read first (page copy comes from config/seo_geo/pages/*.yml).
+SeoGeo.config.llms_txt.page :home, path: "/"

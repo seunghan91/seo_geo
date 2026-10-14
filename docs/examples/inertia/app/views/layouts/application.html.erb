@@ -1,0 +1,14 @@
+<%# app/views/layouts/application.html.erb (Inertia) %>
+<!DOCTYPE html>
+<html lang="<%= seo_geo_html_lang %>">
+  <head>
+    <meta charset="utf-8">
+    <%= seo_geo_head %>
+  </head>
+  <body>
+    <%= yield %>
+    <% if (page = seo_geo_state.page) %>
+      <%= seo_geo_fallback_body(page) %>
+    <% end %>
+  </body>
+</html>

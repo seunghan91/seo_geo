@@ -1,0 +1,21 @@
+<%# Crawler fallback body (seo_geo). Hidden by the seo_geo_head snippet while JavaScript runs. %>
+<main data-seo-fallback>
+  <% if (heading = page.heading || page.title) %>
+    <h1><%= heading %></h1>
+  <% end %>
+  <% page.intro_paragraphs.each do |line| %>
+    <p><%= line %></p>
+  <% end %>
+  <% unless page.features.empty? %>
+    <section data-seo-geo-features>
+      <h2><%= page.extra[:features_heading] || t("seo_geo.fallback.features", default: "Features") %></h2>
+      <ul>
+        <% page.features.each do |feature| %>
+          <li><strong><%= feature[:title] %></strong><% if feature[:description] %> — <%= feature[:description] %><% end %></li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+  <%= render partial: "seo_geo/fallback/faq", locals: { page: page } %>
+  <%= local_assigns[:extra] %>
+</main>

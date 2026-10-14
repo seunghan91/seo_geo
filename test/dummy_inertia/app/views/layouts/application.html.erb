@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="<%= seo_geo_html_lang %>">
+  <head>
+    <meta charset="utf-8">
+    <%= seo_geo_head %>
+  </head>
+  <body>
+    <div id="app" data-page="<%= @inertia_page.to_json %>"></div>
+    <% if (seo_key = @inertia_page.dig(:props, :seo, :key)) %>
+      <%= seo_geo_fallback_body(seo_key) %>
+    <% end %>
+  </body>
+</html>

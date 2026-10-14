@@ -1,0 +1,19 @@
+en:
+  title: Dummy home
+  description: The home page of the dummy application.
+  heading: Welcome to Dummy
+  intro: Dummy exists so seo_geo can be tested inside a real Rails application.
+  features:
+    - title: Fast
+      description: Boots in a second.
+  faq:
+    - q: Is this real?
+      a: It is a test fixture.
+ko:
+  title: 더미 홈
+  description: 더미 애플리케이션의 홈 화면이다.
+  heading: 더미에 오신 것을 환영합니다
+  intro: seo_geo 를 실제 Rails 앱 안에서 시험하기 위한 앱이다.
+  faq:
+    - q: 진짜인가요?
+      a: 테스트용 앱입니다.

@@ -1,0 +1,27 @@
+# seo_geo (Ruby / Rails)
+
+> Rails engine for SEO and GEO (Generative Engine Optimization: visibility in AI search and assistants), not a geolocation gem. One initializer and one layout line give meta tags with canonical folding, JSON-LD from one page-copy source, crawler fallback bodies for Inertia/SPA pages, purpose-based AI crawler policy (training / search / user), per-host robots.txt, sitemap.xml, llms.txt, Markdown negotiation, IndexNow, OG images and an audit task.
+
+- Install: `gem "seo_geo"` in the Gemfile, then `bin/rails g seo_geo:install https://www.example.com`. Version 0.1.0 is not yet on RubyGems; until it is, use `gem "seo_geo", github: "seunghan91/seo_geo"`.
+- Requirements: Ruby >= 3.2, Rails 7.2 / 8.0 / 8.1 (CI covers every cell). Runtime dependencies: railties, actionpack, meta-tags ~> 2.24, reverse_markdown ~> 3.0. Optional: ferrum (OG cards), ActiveJob (IndexNow job).
+- Public API: `SeoGeo.configure`, `SeoGeo.config`, `SeoGeo.sitemap.draw { add ... }`, `SeoGeo.page(:key)`, `SeoGeo.pages.register`; view helpers `seo_geo_head`, `seo_geo_html_lang`, `seo_geo_fallback_body(:key)`, `seo_geo_faq(:key)`; controller `seo(title:, description:, image:, noindex:, index:, canonical:, type:, json_ld:)`, `seo_geo_page(:key)`; `include SeoGeo::Markdownable` + `seo_geo_markdown only:, page:`; `SeoGeo::JsonLd`; `SeoGeo::IndexNow.submit(urls)`, model macro `seo_geo_indexnow on: :publish, url:`; `rake seo_geo:audit`; `rails g seo_geo:install`; `require "seo_geo/testing"` (Minitest) and `require "seo_geo/rspec"`; `SeoGeo::BotVerifier::Middleware`; JS `window.SeoGeo.mounted()`.
+- Routes served when mounted at "/": `GET /robots.txt`, `/sitemap.xml`, `/llms.txt`, `/llms-full.txt`, `/<indexnow-key>.txt`, `/og/:key.png`, and `.md` for every Markdownable action.
+- Invariants: undeclared hosts fail closed; one copy source per page; the User-Agent is never used for access decisions; no invented lastmod.
+- License: MIT.
+
+## Docs
+
+- [README](https://github.com/seunghan91/seo_geo/blob/main/README.md): what it does, install, quick start, Inertia, configuration, limits
+- [AGENTS.md](https://github.com/seunghan91/seo_geo/blob/main/AGENTS.md): when to use it, integration recipe, invariants and check commands for coding agents
+- [Troubleshooting](https://github.com/seunghan91/seo_geo/blob/main/README.md#troubleshooting): exact error and audit messages, causes and fixes
+- [Design and configuration contract](https://github.com/seunghan91/seo_geo/blob/main/docs/DESIGN.md): every configuration key, default and public API
+- [Runnable examples](https://github.com/seunghan91/seo_geo/tree/main/docs/examples): the README and AGENTS code as app files, executed by the test suite
+- [CHANGELOG](https://github.com/seunghan91/seo_geo/blob/main/CHANGELOG.md)
+
+## Optional
+
+- [llms.txt specification](https://llmstxt.org/): the format this gem generates
+- [Which AI actually reads your site (Evil Martians, 2026)](https://evilmartians.com/chronicles/which-ai-actually-reads-your-site-two-months-of-llm-traffic-measured): agent traffic measurements behind the "HTML first, Markdown second, llms.txt cheap" design
+- [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309): Robots Exclusion Protocol, which the robots.txt output follows
+- [IndexNow](https://www.indexnow.org/documentation): the protocol behind `SeoGeo::IndexNow`
+- [webmcp](https://github.com/seunghan91/webmcp): related gem that lets in-browser agents call your app's endpoints as tools

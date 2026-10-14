@@ -1,0 +1,12 @@
+<%# FAQ section (seo_geo). Same text as the FAQPage JSON-LD built from the same page copy. %>
+<% unless page.faq.empty? %>
+  <section data-seo-geo-faq>
+    <h2><%= page.extra[:faq_heading] || t("seo_geo.fallback.faq", default: "FAQ") %></h2>
+    <% page.faq.each do |item| %>
+      <div data-seo-geo-faq-item>
+        <h3><%= item[:question] %></h3>
+        <p><%= item[:answer] %></p>
+      </div>
+    <% end %>
+  </section>
+<% end %>
