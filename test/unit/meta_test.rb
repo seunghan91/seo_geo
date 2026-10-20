@@ -109,6 +109,25 @@ class MetaTest < Minitest::Test
     assert_equal "https://cdn.example.com/default.png", meta.image_url
   end
 
+  def test_article_times_accept_time_date_and_iso_strings
+    inputs = { Time.new(2026, 10, 20, 12, 30, 0, "+09:00") => "2026-10-20T12:30:00+09:00",
+               Date.new(2026, 10, 20) => "2026-10-20",
+               DateTime.iso8601("2026-10-20T12:30:00+09:00") => "2026-10-20T12:30:00+09:00",
+               "2026-10-20T03:30:00Z" => "2026-10-20T03:30:00Z", "2026-10-20" => "2026-10-20" }
+    inputs.each do |input, expected|
+      assert_equal({ published_time: expected, modified_time: expected },
+                   meta(type: "article", published_time: input, modified_time: input).tags[:article])
+    end
+    assert_equal({ published_time: "2026-10-20" }, meta(type: "article", published_time: "2026-10-20").tags[:article])
+    refute meta(type: "article").tags.key?(:article)
+    refute meta(published_time: "bad", modified_time: "bad").tags.key?(:article)
+    assert_raises(ArgumentError) { meta(type: "article", published_time: "yesterday").tags }
+    assert_raises(ArgumentError) { meta(type: "article", modified_time: 123).tags }
+    controller = Class.new { include SeoGeo::Controller }.new
+    controller.seo(type: "article", published_time: "2026-10-20")
+    assert_equal "2026-10-20", controller.seo_geo_state.published_time
+  end
+
   def test_json_ld_graph_includes_site_page_and_extra_nodes
     page = SeoGeo::Page.from_hash(:home, { faq: [{ q: "Q?", a: "A." }] })
     graph = meta("https://example.com/?utm=1", page: page, json_ld: [{ "@type" => "Thing", "name" => "x" }]).json_ld.to_h["@graph"]

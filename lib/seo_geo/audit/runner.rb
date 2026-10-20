@@ -3,6 +3,7 @@
 require "uri"
 require "rack"
 require "rack/mock"
+require "securerandom"
 
 module SeoGeo
   module Audit
@@ -29,14 +30,17 @@ module SeoGeo
       # @param root [String, Pathname, nil] application root for {StaticScan}; nil skips it
       # @param hosts [Array<String>, nil] hosts to audit; nil => {Configuration#known_hosts}
       # @param max_pages [Integer] sitemap URLs fetched per host
-      def initialize(app:, config: SeoGeo.config, sitemap: SeoGeo.sitemap, root: nil, hosts: nil, max_pages: 200)
+      # @param fetcher [#fetch, nil] transport; nil uses {RackFetcher}
+      def initialize(app:, config: SeoGeo.config, sitemap: SeoGeo.sitemap, root: nil, hosts: nil, max_pages: 200, fetcher: nil)
         @app = app
+        @fetcher = fetcher || RackFetcher.new(app: app, config: config)
         @config = config
         @sitemap = sitemap
         @root = root
         @hosts = hosts
         @max_pages = max_pages
         @report = Report.new
+        @descriptions = Hash.new { |hash, key| hash[key] = [] }
         @titles = Hash.new { |hash, key| hash[key] = [] }
       end
 
@@ -48,12 +52,14 @@ module SeoGeo
           (@hosts || @config.known_hosts).each { |host| audit_host(host.to_s.downcase) }
         end
         duplicate_titles
+        duplicate_descriptions
         @report
       end
 
       private
 
       def audit_host(host)
+        check_soft_404(host)
         policy = @config.host_policy(host)
         robots = fetch(host, "/robots.txt")
         evaluator = nil
@@ -70,7 +76,7 @@ module SeoGeo
           check_robots_allows(host, url, evaluator) if evaluator
           audit_page(host, url, from_sitemap: true)
         end
-        home = "#{@config.origin_for(host)}/"
+        home = "#{origin_for(host)}/"
         unless pages.any? { |url| same_page?(url, home) }
           audit_page(host, home, from_sitemap: false, full: policy.sitemap)
         end
@@ -84,7 +90,7 @@ module SeoGeo
           return []
         end
 
-        origin = "#{@config.origin_for(host)}/"
+        origin = "#{origin_for(host)}/"
         problems, locs, kind = Checks.sitemap(response.body, origin: origin)
         problems.each { |message| error(host, "/sitemap.xml", "sitemap.valid", message) }
         return locs unless kind == :sitemapindex
@@ -155,6 +161,7 @@ module SeoGeo
           @titles[[host, title]] << url unless noindex
         end
         description = doc.description.to_s.strip
+        @descriptions[[host, description]] << url unless noindex || description.empty?
         if description.empty?
           warning(host, url, "description.missing", "no meta description")
         elsif !Checks::DESCRIPTION_RANGE.cover?(description.length)
@@ -183,7 +190,7 @@ module SeoGeo
           error(host, markdown_url, "markdown.url", "advertised Markdown URL returned #{dot_md.status} #{dot_md.content_type}")
         end
 
-        negotiated = fetch(host, request_path(url), "HTTP_ACCEPT" => "text/markdown")
+        negotiated = fetch(host, request_path(url), { "HTTP_ACCEPT" => "text/markdown" })
         unless negotiated.status == 200 && negotiated.content_type.to_s.match?(MARKDOWN_TYPE)
           error(host, url, "markdown.accept", "page advertises Markdown but Accept: text/markdown returned " \
                                               "#{negotiated.status} #{negotiated.content_type} (include SeoGeo::Markdownable " \
@@ -201,7 +208,7 @@ module SeoGeo
           return
         end
 
-        origins = [@config.origin_for(host), @config.canonical_origin].uniq
+        origins = [origin_for(host), @config.canonical_origin].uniq
         response.body.scan(/\]\((https?:\/\/[^)\s]+)\)/).flatten.uniq.each do |link|
           next unless origins.any? { |origin| link.start_with?("#{origin}/") || link == origin }
 
@@ -230,27 +237,42 @@ module SeoGeo
         end
       end
 
+      def duplicate_descriptions
+        @descriptions.each do |(host, description), urls|
+          next if urls.uniq.size < 2
+
+          warning(host, urls.first, "description.duplicate",
+                  "description #{description.inspect} is shared by #{urls.uniq.size} URLs: #{urls.uniq.first(5).join(', ')}")
+        end
+      end
+
+      def check_soft_404(host)
+        path = "/seo-geo-audit-#{SecureRandom.hex(8)}"
+        response = fetch(host, path, expected_missing: true)
+        error(host, path, "page.soft_404", "unknown path returned #{response.status} (expected a missing-page response)") if (200..299).cover?(response.status)
+      end
+
+      def origin_for(host)
+        @config.origin_for(host)
+      end
+
       # @return [Rack::MockResponse]
-      def fetch(host, path, headers = {})
-        origin = URI.parse(@config.origin_for(host))
-        scheme = origin.scheme || "https"
-        # Rails HostAuthorization (config.hosts) reads the Host header, not SERVER_NAME: send both, with the port
-        # only when it is not the scheme's default.
-        authority = origin.port && origin.port != origin.default_port ? "#{host}:#{origin.port}" : host
-        env = Rack::MockRequest.env_for("#{scheme}://#{authority}#{path}",
-                                        { "REMOTE_ADDR" => "127.0.0.1", "HTTP_ACCEPT" => "text/html" }.merge(headers))
-        env["HTTP_HOST"] = authority
-        env["HTTPS"] = "on" if scheme == "https"
-        status, response_headers, body = @app.call(env)
-        response = Rack::MockResponse.new(status, response_headers, body)
-        if status == 403 && host_blocked?(host, response)
-          error(host, path, "host_authorization", "Rails HostAuthorization blocked Host: #{authority}; run it through " \
+      def fetch(host, path, headers = {}, expected_missing: false)
+        response = @fetcher.fetch(host, path, headers)
+        if response.status == 403 && host_blocked?(host, response)
+          error(host, path, "host_authorization", "Rails HostAuthorization blocked Host: #{URI.parse(origin_for(host)).authority}; run it through " \
                                                   "`bin/rails seo_geo:audit` (or set SEO_GEO_AUDIT=1 before boot, e.g. for " \
                                                   "bin/rails runner) so seo_geo allows its hosts outside production, or " \
                                                   "add #{host.inspect} to config.hosts")
         end
         response
       rescue StandardError => e
+        # Test/development apps can raise their configured 404 exceptions instead of rendering a response.
+        if expected_missing && defined?(ActionDispatch::ExceptionWrapper) &&
+           ActionDispatch::ExceptionWrapper.status_code_for_exception(e.class.name) == 404
+          return Rack::MockResponse.new(404, {}, [])
+        end
+
         error(host, path, "exception", "#{e.class}: #{e.message.lines.first.to_s.strip}")
         Rack::MockResponse.new(500, {}, [])
       end

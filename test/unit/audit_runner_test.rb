@@ -67,6 +67,19 @@ class AuditRunnerTest < Minitest::Test
     assert report.errors?
   end
 
+  def test_duplicate_descriptions_and_soft_404_for_each_host
+    report = run_audit
+    assert_includes checks(report, :warning), ["description.duplicate", "https://www.example.com/"]
+    probes = @requests.select { |key, _| key.match?(%r{/seo-geo-audit-[0-9a-f]{16}\z}) }
+    assert_equal 2, probes.size
+    refute_includes report.errors.map(&:check), "page.soft_404"
+    catch_all = lambda do |env|
+      env["PATH_INFO"].start_with?("/seo-geo-audit-") ? [201, {}, ["catch all"]] : app.call(env)
+    end
+    report = SeoGeo::Audit::Runner.new(app: catch_all, config: @config).run
+    assert_equal 2, report.errors.count { |finding| finding.check == "page.soft_404" }
+  end
+
   def test_audits_as_an_indexable_environment_and_restores_it
     run_audit
     assert(@requests.all? { |_, https, env| https == "on" && env == "production" })

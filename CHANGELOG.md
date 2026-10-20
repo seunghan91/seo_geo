@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add standalone remote audits (`URL` / `URLS`, `Audit::Remote.run`) with shared checks, Rack/HTTP fetchers,
+  serial paced requests, bounded redirect tracing, X-Robots-Tag errors and configured robots comparison.
+- Detect soft-404 responses with a random missing path on each audited host, in-process and remotely.
+- Warn when indexable pages on the same host share a meta description.
+- Support `seo published_time:` / `modified_time:` as ISO 8601 article Open Graph tags, with executable examples.
+
 ## 0.1.0 - 2026-10-14
 
 First release.
