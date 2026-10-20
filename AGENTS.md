@@ -162,6 +162,29 @@ end
 RSpec: `require "seo_geo/rspec"` gives `have_seo_geo_canonical`, `have_seo_geo_single_title`,
 `have_seo_geo_faq_matching_visible_text`, `be_seo_geo_valid_sitemap(origin:)` and `seo_geo_robots_allow(ua, path)`.
 
+For article pages, pass `type: "article"`, `published_time:` and `modified_time:` to `seo`.
+Use the article's real stored dates: `Time`, `Date` and ISO 8601 strings are accepted and output as ISO 8601.
+Date-only values remain date-only; invalid values raise `ArgumentError` when rendering an article.
+These tags are omitted for other OG types and when no time is supplied.
+
+<!-- example: quickstart/app/controllers/articles_controller.rb -->
+```ruby
+# app/controllers/articles_controller.rb
+class ArticlesController < ApplicationController
+  def show
+    seo title: "Example launch", type: "article",
+        published_time: Time.iso8601("2026-10-01T09:00:00+09:00"),
+        modified_time: "2026-10-02T12:00:00+09:00"
+  end
+end
+```
+
+<!-- output: quickstart GET /articles/launch Host=www.example.com -->
+```html
+<meta property="article:published_time" content="2026-10-01T09:00:00+09:00">
+<meta property="article:modified_time" content="2026-10-02T12:00:00+09:00">
+```
+
 ## Invariants — do not violate
 
 1. **Hosts fail closed.** Every hostname that serves the app is either `canonical_origin`'s host, listed in
@@ -196,6 +219,25 @@ SEO_GEO_AUDIT=1 bin/rails runner 'puts SeoGeo::Audit::Runner.new(app: Rails.appl
 The rake task audits as production even in development: it sets `SEO_GEO_AUDIT=1` itself, so the engine adds
 the configured hosts to `config.hosts` for that run (`seo_geo audit: temporarily allowing ... in config.hosts`).
 A runner needs the variable before boot. Production `config.hosts` is never widened.
+
+Audit deployed HTTP responses without booting the application with `URL` or comma-separated `URLS`:
+
+```sh
+bundle exec rake seo_geo:audit URL=https://www.example.com
+bundle exec rake seo_geo:audit URLS=https://www.example.com,https://www.example.com/pricing FORMAT=json
+```
+
+Remote requests run serially with a 0.5-second pause between requests, 10-second connect/read/write timeouts
+and `User-Agent: seo_geo-audit/<VERSION>`. The initial response remains the audit input; redirect destinations
+are explicitly probed and recorded up to five hops. More than one hop warns (`page.redirect_chain`), while loops,
+unfinished chains and `X-Robots-Tag: noindex` (including scoped `none`) are errors. `robots.mismatch` warns only
+when an already available configuration declares the host and its rendered robots.txt differs from the response.
+No Rails initializer is loaded for remote mode, so pass an existing configuration via
+`SeoGeo::Audit::Remote.run(urls, io: $stdout, config: config)` when a comparison is needed.
+Without configuration, canonical URLs are checked against the requested origin and robots blocking against `*`;
+intentional crawler-specific denials cannot be inferred. Both audit modes probe a random missing path per host
+(`page.soft_404` on 2xx) and warn about duplicate descriptions on indexable pages (`description.duplicate`).
+Remote audits judge the live site as production would: like the in-process audit they switch the config to an indexable environment for the run and restore it afterwards. They do not widen `config.hosts` or scan local source files.
 
 With the app running (`bin/rails s`), check what crawlers and agents receive. robots.txt and sitemap.xml only
 open up in `indexable_environments` (default production):

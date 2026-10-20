@@ -3,6 +3,8 @@
 require "uri"
 require "erb"
 require "json"
+require "time"
+require "date"
 require "meta-tags"
 
 module SeoGeo
@@ -21,7 +23,7 @@ module SeoGeo
   class Meta
     # Per-request values set by the controller ({SeoGeo::Controller#seo}) or views.
     State = Struct.new(:title, :description, :image, :noindex, :index, :canonical, :page, :type,
-                       :markdown, :json_ld, keyword_init: true) do
+                       :markdown, :json_ld, :published_time, :modified_time, keyword_init: true) do
       def initialize(**)
         super
         self.json_ld ||= []
@@ -168,6 +170,10 @@ module SeoGeo
       end
       tags[:og] = open_graph
       tags[:twitter] = twitter
+      if state.type.to_s == "article"
+        article = { published_time: article_time(state.published_time), modified_time: article_time(state.modified_time) }.compact
+        tags[:article] = article unless article.empty?
+      end
       tags.merge(config.verification.meta_tags.transform_keys(&:to_sym)).compact
     end
 
@@ -220,6 +226,17 @@ module SeoGeo
       links = alternates.map { |link| { href: link[:href], hreflang: link[:hreflang] } }
       links << { href: markdown_url, type: "text/markdown" } if markdown_url
       links.empty? ? nil : links
+    end
+
+    def article_time(value)
+      case value
+      when nil then nil
+      when Time, Date then value.iso8601
+      when String
+        value.match?(/\A\d{4}-\d{2}-\d{2}\z/) ? Date.iso8601(value).iso8601 : Time.iso8601(value).iso8601
+      else
+        raise ArgumentError, "article time must be a Time, Date or ISO 8601 string"
+      end
     end
 
     def open_graph

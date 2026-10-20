@@ -9,8 +9,19 @@ namespace :seo_geo do
   end
 
   desc "Audit robots.txt, sitemap.xml, llms.txt and every sitemap page in-process " \
-       "(FORMAT=json, HOSTS=a.com,b.com, MAX_PAGES=200); exits 1 when there are errors"
-  task audit: %i[audit_flag environment] do
+       "(URL=https://example.com or URLS=a,b for remote; FORMAT=json, HOSTS=a.com,b.com, MAX_PAGES=200); exits 1 when there are errors"
+  task :audit do
+    urls = (ENV["URLS"] || ENV["URL"]).to_s.split(",").map(&:strip).reject(&:empty?)
+    unless urls.empty?
+      require "seo_geo"
+      report = SeoGeo::Audit::Remote.run(urls, max_pages: Integer(ENV.fetch("MAX_PAGES", "200"), 10),
+                                       format: ENV.fetch("FORMAT", "text"))
+      exit(1) if report.errors?
+      next
+    end
+
+    Rake::Task["seo_geo:audit_flag"].invoke
+    Rake::Task["environment"].invoke
     report = SeoGeo::Audit::Runner.new(
       app: Rails.application,
       root: Rails.root,

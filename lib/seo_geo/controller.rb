@@ -33,6 +33,8 @@ module SeoGeo
     # @param canonical [String, false] path or URL to canonicalize; false omits the canonical link and hreflang
     # @param page [Symbol, Page] page copy (title/description/FAQ JSON-LD defaults)
     # @param type [String] og:type (default "website")
+    # @param published_time [Time, Date, String] ISO 8601 article publication time (type: "article" only)
+    # @param modified_time [Time, Date, String] ISO 8601 article modification time (type: "article" only)
     # @param markdown [Boolean] false hides the Markdown alternate link
     # @param json_ld [Hash, JsonLd, Array] extra JSON-LD nodes
     # @return [Meta::State]

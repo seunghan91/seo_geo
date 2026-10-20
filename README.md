@@ -108,6 +108,7 @@ SeoGeo.config.llms_txt.page :home, path: "/"
 Rails.application.routes.draw do
   root "pages#home"
   get "/pricing", to: "pages#pricing"
+  get "/articles/launch", to: "articles#show"
 
   mount SeoGeo::Engine, at: "/"  # last, so your own routes win where paths overlap
 end
@@ -275,6 +276,48 @@ On a real app warnings appear in the same line, for example
 line per finding. Calling `SeoGeo::Audit::Runner` from `bin/rails runner` needs `SEO_GEO_AUDIT=1` set before
 boot for the same host allowance.
 
+Audit deployed HTTP responses without booting the application with `URL` or comma-separated `URLS`:
+
+```sh
+bundle exec rake seo_geo:audit URL=https://www.example.com
+bundle exec rake seo_geo:audit URLS=https://www.example.com,https://www.example.com/pricing FORMAT=json
+```
+
+Remote requests run serially with a 0.5-second pause between requests, 10-second connect/read/write timeouts
+and `User-Agent: seo_geo-audit/<VERSION>`. The initial response remains the audit input; redirect destinations
+are explicitly probed and recorded up to five hops. More than one hop warns (`page.redirect_chain`), while loops,
+unfinished chains and `X-Robots-Tag: noindex` (including scoped `none`) are errors. `robots.mismatch` warns only
+when an already available configuration declares the host and its rendered robots.txt differs from the response.
+No Rails initializer is loaded for remote mode, so pass an existing configuration via
+`SeoGeo::Audit::Remote.run(urls, io: $stdout, config: config)` when a comparison is needed.
+Without configuration, canonical URLs are checked against the requested origin and robots blocking against `*`;
+intentional crawler-specific denials cannot be inferred. Both audit modes probe a random missing path per host
+(`page.soft_404` on 2xx) and warn about duplicate descriptions on indexable pages (`description.duplicate`).
+Remote audits judge the live site as production would: like the in-process audit they switch the config to an indexable environment for the run and restore it afterwards. They do not widen `config.hosts` or scan local source files.
+
+For article pages, pass `type: "article"`, `published_time:` and `modified_time:` to `seo`.
+Use the article's real stored dates: `Time`, `Date` and ISO 8601 strings are accepted and output as ISO 8601.
+Date-only values remain date-only; invalid values raise `ArgumentError` when rendering an article.
+These tags are omitted for other OG types and when no time is supplied.
+
+<!-- example: quickstart/app/controllers/articles_controller.rb -->
+```ruby
+# app/controllers/articles_controller.rb
+class ArticlesController < ApplicationController
+  def show
+    seo title: "Example launch", type: "article",
+        published_time: Time.iso8601("2026-10-01T09:00:00+09:00"),
+        modified_time: "2026-10-02T12:00:00+09:00"
+  end
+end
+```
+
+<!-- output: quickstart GET /articles/launch Host=www.example.com -->
+```html
+<meta property="article:published_time" content="2026-10-01T09:00:00+09:00">
+<meta property="article:modified_time" content="2026-10-02T12:00:00+09:00">
+```
+
 ## Inertia (React, Vue, Svelte)
 
 Inertia sends an empty `<div id="app">`, and crawlers that do not run JavaScript (GPTBot, ClaudeBot,
@@ -395,7 +438,7 @@ are read with `find_each` (`select` must include `id`, `order` is ignored); `bat
 | `title_template must contain %{title}` | A template such as `"%{site}"` | Include `%{title}`, or use `"%{title}"` to drop the suffix |
 | `CANONICAL_ORIGIN must look like https://www.example.com (got "example.com")` | Generator argument without a scheme | `bin/rails g seo_geo:install https://www.example.com` |
 | `SeoGeo::JsonLd::InvalidNode: Product "Widget" needs offers, review or aggregate_rating` | A typed JSON-LD node lacks a property Google requires | Pass the property, or leave the node out; never invent one |
-| `unknown seo option(s): titel (known: title, description, image, noindex, index, canonical, page, type, markdown, json_ld)` | Typo in a controller `seo(...)` call | Use one of the listed keys |
+| `unknown seo option(s): titel (known: title, description, image, noindex, index, canonical, page, type, markdown, json_ld, published_time, modified_time)` | Typo in a controller `seo(...)` call | Use one of the listed keys |
 | `KeyError: seo_geo page :pricing is not defined` | No `config/seo_geo/pages/pricing.yml`, I18n scope or `SeoGeo.pages.register` | Add the page copy, or check the key and the YAML locale keys |
 | `collections need path: (a callable or a record method name)` | `sitemap.add -> { Post.published }` without `path:` | `add -> { Post.published }, path: ->(post) { "/posts/#{post.slug}" }` |
 | `sitemap path "pricing" must start with /` | Relative sitemap path | `add "/pricing"` |

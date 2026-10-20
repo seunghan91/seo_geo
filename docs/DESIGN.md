@@ -21,7 +21,7 @@ fixed; changing one requires updating this file in the same change.
 | Area | Files | Public API |
 |---|---|---|
 | Core | `lib/seo_geo.rb`, `lib/seo_geo/{configuration,crawlers,page,version,engine}.rb`, `lib/seo_geo/sitemap/registry.rb`, `lib/seo_geo/{robots_path,robots_directives,safe_regexp,undeclared_host}.rb` | `SeoGeo.configure`, `SeoGeo.config`, `SeoGeo.sitemap`, `SeoGeo.pages`, `SeoGeo.page` |
-| Head | `lib/seo_geo/meta.rb`, `lib/seo_geo/json_ld.rb`, `lib/seo_geo/json_ld/**`, `lib/seo_geo/crawler_fallback.rb`, `app/helpers/seo_geo/**`, `app/views/seo_geo/head/**`, `app/views/seo_geo/fallback/**`, `lib/seo_geo/controller.rb` | `seo_geo_head`, `seo_geo_fallback_body(key)`, `seo_geo_html_lang`, controller `seo(title:, description:, image:, noindex:, index:, canonical:)`, `SeoGeo::Page#json_ld`, `SeoGeo::JsonLd` builder, JS `window.SeoGeo.mounted()` |
+| Head | `lib/seo_geo/meta.rb`, `lib/seo_geo/json_ld.rb`, `lib/seo_geo/json_ld/**`, `lib/seo_geo/crawler_fallback.rb`, `app/helpers/seo_geo/**`, `app/views/seo_geo/head/**`, `app/views/seo_geo/fallback/**`, `lib/seo_geo/controller.rb` | `seo_geo_head`, `seo_geo_fallback_body(key)`, `seo_geo_html_lang`, controller `seo(title:, description:, image:, noindex:, index:, canonical:, type:, published_time:, modified_time:)`, `SeoGeo::Page#json_ld`, `SeoGeo::JsonLd` builder, JS `window.SeoGeo.mounted()` |
 | Crawler files | `app/controllers/seo_geo/{robots,sitemaps,llms}_controller.rb`, `lib/seo_geo/robots.rb`, `lib/seo_geo/sitemap/xml.rb`, `lib/seo_geo/llms_txt.rb`, `app/views/seo_geo/{robots,sitemaps,llms}/**` | `GET /robots.txt`, `GET /sitemap.xml`, `GET /llms.txt`, `GET /llms-full.txt` |
 | Markdown, IndexNow, OG | `lib/seo_geo/markdownable.rb`, `lib/seo_geo/markdown/**`, `lib/seo_geo/index_now.rb`, `app/jobs/seo_geo/**`, `app/controllers/seo_geo/{index_now,og_images}_controller.rb`, `lib/seo_geo/og_image/**`, `lib/seo_geo/model.rb` | `SeoGeo::Markdownable`, `SeoGeo::IndexNow.submit(urls)`, model macro `seo_geo_indexnow on: :publish`, `GET /<key>.txt`, `GET /og/:key.png` |
 | Audit and testing | `lib/tasks/seo_geo.rake`, `lib/seo_geo/publication.rb`, `lib/seo_geo/audit.rb`, `lib/seo_geo/audit/**`, `lib/generators/seo_geo/**`, `lib/seo_geo/testing.rb`, `lib/seo_geo/testing/**`, `lib/seo_geo/rspec.rb`, `lib/seo_geo/robots/evaluator.rb`, `lib/seo_geo/bot_verifier.rb`, `lib/seo_geo/path_match.rb` | `rake seo_geo:audit`, `rails g seo_geo:install`, Minitest assertions + RSpec matchers, `SeoGeo::Robots::Evaluator`, `SeoGeo::BotVerifier` (+ `::Middleware`) |
@@ -201,7 +201,11 @@ serves Markdown (`seo_geo_markdown_available?`: includes `SeoGeo::Markdownable` 
 ## Public API (target, all phases)
 
 - Layout: `<%= seo_geo_head %>` (meta-tags + canonical + hreflang + verification + `<link rel="alternate" type="text/markdown">` + JSON-LD), `<%= seo_geo_fallback_body(:home) %>`, `seo_geo_html_lang`.
-- Controller: `seo title:, description:, image:, noindex:, canonical:`; `include SeoGeo::Markdownable`.
+- Controller: `seo title:, description:, image:, noindex:, index:, canonical:, type:, published_time:, modified_time:`; `include SeoGeo::Markdownable`.
+  `published_time` and `modified_time` accept Time, Date (including DateTime), or ISO 8601 strings; they emit
+  `article:published_time` / `article:modified_time` only for `type: "article"`. Values serialize as ISO 8601,
+  preserving offsets and date-only precision. Missing values are omitted; invalid article values raise ArgumentError.
+  Never substitute the current time for an unknown publication or modification date.
 - JSON-LD extension point: `content_for(:seo_geo_json_ld)`; escaping via `ERB::Util.json_escape` only; CSP nonce honored.
 - `SeoGeo::IndexNow.submit(urls)`; model `seo_geo_indexnow on: :publish`.
 - `rake seo_geo:audit` (`FORMAT=json`, `HOSTS=a,b`, `MAX_PAGES=200`; exit 1 on errors) = `SeoGeo::Audit::Runner.new(app:, root:).run` -> `Audit::Report`.
@@ -212,6 +216,26 @@ serves Markdown (`seo_geo_markdown_available?`: includes `SeoGeo::Markdownable` 
   `build_middleware_stack`, which copies `config.hosts`) appends every configured host to a non-empty `config.hosts`
   and logs `seo_geo audit: temporarily allowing <hosts> in config.hosts`. Never in production, never without the
   flag. For `bin/rails runner` audits, run `SEO_GEO_AUDIT=1 bin/rails runner ...`.
+- `SeoGeo::Audit::RackFetcher.new(app:, config:).fetch(host, path, headers = {})` preserves the Rack transport;
+  `Runner.new(app:, fetcher: nil, ...)` accepts a replacement transport without changing its checks.
+- `SeoGeo::Audit::HttpFetcher.new(origin:, delay: 0.5, timeout: 10).fetch(host, path, headers = {})` uses Net::HTTP,
+  one request at a time, 0.5 seconds between requests (including origins and redirect probes), no automatic retries,
+  10-second connect/read/write timeouts and `seo_geo-audit/<VERSION>` as User-Agent. HTTP(S) URLs only, no credentials.
+  It returns the original response without replacing a redirect with its destination; `chain` records the initial
+  response and up to five explicit redirect probes (`url`, `status`, `headers`). Loops/invalid targets/limit failures
+  populate `redirect_error`. A trace longer than one hop warns; unfinished traces error.
+- `SeoGeo::Audit::Remote.run(urls, io: $stdout, config: SeoGeo.config, max_pages: 200, delay: 0.5, timeout: 10, format: :text)`
+  returns `Audit::Report` and prints to `io` (nil suppresses output). Rake `URL=...` / `URLS=a,b` selects it before
+  invoking any Rails environment task; it never changes configuration/environment/host authorization or scans source.
+  Explicit targets plus each origin's robots/sitemap/home/llms responses use the same Runner/Checks. Without a
+  matching host configuration it uses an isolated observation configuration (no change to the app's fail-closed
+  policy), checks canonical against that origin and robots blocking against `*`. Matching config enables canonical
+  folding, intentional crawler denials and robots comparison. External sitemap pages are reported but not crawled.
+  Remote errors: `page.x_robots_noindex` for X-Robots-Tag noindex/none (global or scoped, including redirect probes),
+  `page.redirect` for incomplete chains. Warnings: `page.redirect_chain` (>1 hop), `robots.mismatch` (body differs
+  from `Robots.new(config, host).to_s`, only for a known host). Existing Markdown checks also verify Vary: Accept.
+- Both modes request `/seo-geo-audit-<16hex>` once per host (`page.soft_404` error on any 2xx) and collect
+  `description.duplicate` warnings like `title.duplicate`, excluding empty descriptions and noindex pages.
 - `rails g seo_geo:install [CANONICAL_ORIGIN] [--site-name=NAME]`.
 - Test helpers: `require "seo_geo/testing"` + `include SeoGeo::Testing::Assertions` (`assert_seo_geo_canonical`,
   `assert_seo_geo_single_title`, `assert_seo_geo_faq_matches_visible`, `assert_seo_geo_sitemap`, `assert_seo_geo_no_sitemap`,

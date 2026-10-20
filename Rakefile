@@ -39,3 +39,7 @@ end
 desc "Run unit tests, docs example tests and app tests against both dummy applications"
 task test: ["test:unit", "test:docs", "test:erb", "test:inertia"]
 task default: :test
+
+# Also expose the standalone remote audit without a Rails application.
+$LOAD_PATH.unshift(File.expand_path("lib", __dir__))
+load File.expand_path("lib/tasks/seo_geo.rake", __dir__)
