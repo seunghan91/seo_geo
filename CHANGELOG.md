@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-10-20
 
 - Add standalone remote audits (`URL` / `URLS`, `Audit::Remote.run`) with shared checks, Rack/HTTP fetchers,
   serial paced requests, bounded redirect tracing, X-Robots-Tag errors and configured robots comparison.
